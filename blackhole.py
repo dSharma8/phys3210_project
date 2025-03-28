@@ -17,7 +17,12 @@ r_s = 2 * G * m_bh / c**2 # schwarzschild radius of black hole [m]
 
 # define initial conditions of star
 x, y = r_s*5, r_s*5
-v_x, v_y = -50000000, 0
+# v_x, v_y = -50000000, 0
+
+r_initial = math.sqrt(x**2 + y**2)
+v_orbit = math.sqrt(G * m_bh/r_initial)
+v_x = -v_orbit * (y/r_initial)
+v_y = v_orbit * (x/r_initial)
 
 # define function for force of grav on star in x and y directions
 def f_grav(m1, m2, x, y):
@@ -56,7 +61,7 @@ def update(frame):
     v_x += a_x * dt
     x += v_x * dt
     v_y += a_y * dt
-    y += v_y * dt 
+    y += v_y * dt
     
     # in the case star falls into event horizon
     if math.sqrt(x**2 + y**2) <= r_s: x, y = 0, 0
