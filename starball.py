@@ -177,8 +177,8 @@ def rk4_cloud(x, y, v_x, v_y):
 
 # define plot
 fig, ax = plt.subplots(figsize=(6, 6))
-ax.set_xlim(-r_bh*15, r_bh*15)
-ax.set_ylim(-r_bh*15, r_bh*15)
+ax.set_xlim(-r_bh*10, r_bh*10)
+ax.set_ylim(-r_bh*10, r_bh*10)
 
 # plot black hole
 ax.plot(0, 0, 'o', color='black', markersize=10)
@@ -221,6 +221,21 @@ def update(frame):
 
     return star, star_cloud
 
-# plot animation
-ani = animation.FuncAnimation(fig, update, frames=500, init_func=init, blit=True, interval=10)
+def run_animation():
+    ani_running = True
+
+    # pause functionality
+    def onClick(event):
+        nonlocal ani_running
+        if ani_running:
+            ani.event_source.stop()
+            ani_running = False
+        else:
+            ani.event_source.start()
+            ani_running = True
+
+    fig.canvas.mpl_connect('button_press_event', onClick)
+    ani = animation.FuncAnimation(fig, update, frames=500, init_func=init, blit=True, interval=10)
+
+run_animation()
 plt.show()
