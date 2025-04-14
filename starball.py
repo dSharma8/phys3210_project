@@ -10,7 +10,7 @@ c = 2.99792458e8 # speed of light [m/s]
 G = 6.67408e-11 # gravitational constant [m^3 kg^-1 s^-2]
 dt = 10 # time step [s]
 num_steps = 10000 # number of simulation time steps
-
+particle_count = 0
 # define variables
 m_bh = 1e6 * solar_mass # mass of black hole [kg]
 m_star = 10 * solar_mass # mass of red giant star [kg]
@@ -180,6 +180,8 @@ fig, ax = plt.subplots(figsize=(6, 6))
 ax.set_xlim(-r_bh*10, r_bh*10)
 ax.set_ylim(-r_bh*10, r_bh*10)
 
+counter_text = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+
 # plot black hole
 ax.plot(0, 0, 'o', color='black', markersize=10)
 ax.add_patch(plt.Circle((0, 0), r_bh, color='black', fill=False, linestyle='dashed'))
@@ -198,7 +200,7 @@ def init():
 def update(frame):
     global x_star, y_star, v_x_star, v_y_star
     global x_cloud, y_cloud, v_x_cloud, v_y_cloud
-    
+    global particle_count
     x_star, y_star, v_x_star, v_y_star = rk4_point(x_star, y_star, v_x_star, v_y_star)
     x_cloud, y_cloud, v_x_cloud, v_y_cloud = rk4_cloud(x_cloud, y_cloud, v_x_cloud, v_y_cloud)
 
@@ -206,6 +208,8 @@ def update(frame):
     if math.sqrt(x_star**2 + y_star**2) <= r_bh: 
         x_star, y_star = 0, 0
         v_x_star, v_y_star = 0, 0
+        particle_count += 1
+
     r = np.sqrt(x_cloud**2 + y_cloud**2)
     mask = r <= r_bh
     x_cloud[mask], y_cloud[mask] = 0, 0
@@ -219,7 +223,8 @@ def update(frame):
     star_cloud.set_offsets(np.column_stack((x_cloud, y_cloud)))
     star_cloud.set_color(star_color)
 
-    return star, star_cloud
+    counter_text.set_text(f"Lost particles: {particle_count}")
+    return star, star_cloud, counter_text
 
 def run_animation():
     ani_running = True
