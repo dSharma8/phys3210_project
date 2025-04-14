@@ -128,7 +128,11 @@ def update(frame):
     x1[mask], y1[mask] = 0, 0
     v_x1[mask], v_y1[mask] = 0, 0
 
+    speed = np.sqrt(v_x1**2 + v_y1**2)
+    speed_norm = np.clip(speed / 1e8, 0, 1) 
+    star_color = np.column_stack((speed_norm, np.full_like(speed_norm, 0.2), 1.0 - speed_norm))
     star1.set_offsets(np.column_stack((x1, y1)))
+    star1.set_color(star_color)
 
     return star1,
 
