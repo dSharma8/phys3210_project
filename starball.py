@@ -13,38 +13,45 @@ num_steps = 10000 # number of simulation time steps
 
 # define variables
 m_bh = 1e6 * solar_mass # mass of black hole [kg]
-m_star = 10 * solar_mass # mass of red giant star [kg]
+m_star = 10 * solar_mass # mass of star [kg]
 r_bh = 2 * G * m_bh / c**2 # schwarzschild radius of black hole [m]
 r_s = solar_radius # radius of star [m]
 n_particles = 1000 # number of particles in star
 m_particles = np.ones(n_particles) * m_star / n_particles # mass of particles [kg]
 
+# define initial conditions
+init_x = r_bh*5
+init_y = r_bh*5
+init_v_x = -6e7
+init_v_y = 6e7
+
 # generate central star
-x_star, y_star = r_bh*5, r_bh*5
-v_x_star, v_y_star = -3e7, 3e7
+x_star, y_star = init_x, init_y
+v_x_star, v_y_star = init_v_x, init_v_y
 
-# generate particle cloud
+# generate random particle cloud
 theta = np.linspace(0, 2*np.pi, n_particles)
-radii = np.random.uniform(0, r_s, n_particles)  # random radii
-x_cloud = (radii * np.cos(theta)) + r_bh*5
-y_cloud = (radii * np.sin(theta)) + r_bh*5
-v_x_cloud = np.ones(n_particles) * -3e7
-v_y_cloud = np.ones(n_particles) * 3e7
+radii = np.random.uniform(0, r_s, n_particles)
+x_cloud = (radii * np.cos(theta)) + init_x
+y_cloud = (radii * np.sin(theta)) + init_y
+v_x_cloud = np.ones(n_particles) * init_v_x
+v_y_cloud = np.ones(n_particles) * init_v_y
 
-# define function for force of grav on star in x and y directions
+# define function for force of grav on star -- newtonian
 def f_grav_point(m1, m2, x, y):
     r = math.sqrt(x**2 + y**2)
     if r == 0: return 0, 0
-    f = -1 * G * m1 * m2 / r**2
+    f = -1 * G * m1 / r**2
     fx = f * (x / r) 
     fy = f * (y / r)
     return fx, fy
 def f_grav_cloud(m1, m2, x, y):
+    #"""
     r = np.sqrt(x**2 + y**2)
     fx = np.zeros(n_particles)
     fy = np.zeros(n_particles)
     mask = r != 0
-    f = np.where(mask, -1 * G * m1 * m2 / r**2, 0)
+    f = np.where(mask, -1 * G * m1 / r**2, 0)
     fx[mask] = f[mask] * (x[mask] / r[mask]) 
     fy[mask] = f[mask] * (y[mask] / r[mask]) 
     return fx, fy
@@ -71,7 +78,26 @@ def f_grav_cloud(m1, m2, x, y):
     # sum total forces
     fx = fx_bh + fx_star
     fy = fy_bh + fy_star
-    return fx, fy"""
+    return fx, fy
+    """
+
+# define function for force of grav on star -- paczyński–wiita potential = phi = - G * M / (r - r_bh)
+def f_grav_pw_point(m1, m2, x, y):
+    r = math.sqrt(x**2 + y**2)
+    if r <= r_bh: return 0, 0
+    f = -1 * G * m1 * m2 / (r - r_bh)**2
+    fx = f * (x / r) 
+    fy = f * (y / r)
+    return fx, fy
+def f_grav_pw_cloud(m1, m2, x, y):
+    r = np.sqrt(x**2 + y**2)
+    fx = np.zeros(n_particles)
+    fy = np.zeros(n_particles)
+    mask = r > r_bh
+    f = np.where(mask, -1 * G * m1 * m2 / (r - r_bh)**2, 0)
+    fx[mask] = f[mask] * (x[mask] / r[mask]) 
+    fy[mask] = f[mask] * (y[mask] / r[mask]) 
+    return fx, fy
 
 """
 # define function for tidal forces across star
@@ -91,7 +117,7 @@ def t_force(x, y, r_s, m_star, m_bh):
 def rk4_point(x, y, v_x, v_y):
     # calc acceleration from grav in x and y directions
     def accel(x, y):
-        f_x, f_y = f_grav_point(m_bh, m_star, x, y)
+        f_x, f_y = f_grav_pw_point(m_bh, m_star, x, y)
         a_x = f_x / m_star
         a_y = f_y / m_star
         return a_x, a_y
@@ -134,7 +160,7 @@ def rk4_point(x, y, v_x, v_y):
 def rk4_cloud(x, y, v_x, v_y):
     # calc acceleration from grav in x and y directions
     def accel(x, y):
-        f_x, f_y = f_grav_cloud(m_bh, m_star, x, y)
+        f_x, f_y = f_grav_pw_cloud(m_bh, m_star, x, y)
         a_x = f_x / m_star
         a_y = f_y / m_star
         return a_x, a_y
@@ -235,7 +261,7 @@ def run_animation():
             ani_running = True
 
     fig.canvas.mpl_connect('button_press_event', onClick)
-    ani = animation.FuncAnimation(fig, update, frames=500, init_func=init, blit=True, interval=10)
+    ani = animation.FuncAnimation(fig, update, frames=500, init_func=init, blit=True, interval=20)
 
 run_animation()
 plt.show()

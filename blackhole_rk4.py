@@ -7,7 +7,7 @@ import matplotlib.animation as animation
 solar_mass = 1.98892e30 # one solar mass [kg]
 c = 2.99792458e8 # speed of light [m/s]
 G = 6.67408e-11 # gravitational constant [m^3 kg^-1 s^-2]
-dt = 100 # time step (s)
+dt = 10 # time step (s)
 num_steps = 10000 # number of sim time steps
 
 # define variables
@@ -24,6 +24,17 @@ def f_grav(m1, m2, x, y):
     r = math.sqrt(x**2 + y**2)
     if r == 0: return 0, 0
     f = -1 * G * m1 * m2 / r**2
+    fx = f * (x / r) 
+    fy = f * (y / r)
+    return fx, fy
+
+# define function for force of grav on star -- paczyński–wiita
+def f_grav_pw(m1, m2, x, y):
+    # phi = - G * M / (r - r_bh)
+    # f = -dphi/dr
+    r = math.sqrt(x**2 + y**2)
+    if r <= r_bh: return 0, 0
+    f = -1 * G * m1 * m2 / (r - r_bh)**2
     fx = f * (x / r) 
     fy = f * (y / r)
     return fx, fy
@@ -55,7 +66,7 @@ def update(frame):
     def rk4(x, y, v_x, v_y):
         # calc acceleration from grav in x and y directions
         def accel(x, y):
-            f_x, f_y = f_grav(m_bh, m_star, x, y)
+            f_x, f_y = f_grav_pw(m_bh, m_star, x, y)
             a_x = f_x / m_star
             a_y = f_y / m_star
             return a_x, a_y
