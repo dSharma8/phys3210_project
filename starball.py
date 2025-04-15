@@ -2,6 +2,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from scipy.optimize import minimize
 
 # define constants
 solar_mass = 1.98892e30 # one solar mass [kg]
@@ -16,14 +17,16 @@ m_bh = 1e6 * solar_mass # mass of black hole [kg]
 m_star = 10 * solar_mass # mass of star [kg]
 r_bh = 2 * G * m_bh / c**2 # schwarzschild radius of black hole [m]
 r_s = solar_radius # radius of star [m]
+r_roche = r_s * (2 * m_bh / m_star)**(1.0/3.0) # roche limit of black hole [m]
 n_particles = 1000 # number of particles in star
 m_particles = np.ones(n_particles) * m_star / n_particles # mass of particles [kg]
+n_particles_consumed = 0 # number of particles consumed by black hole
 
 # define initial conditions
 init_x = r_bh*5
 init_y = r_bh*5
-init_v_x = -6e7
-init_v_y = 6e7
+init_v_x = -3e7
+init_v_y = 3e7
 
 # generate central star
 x_star, y_star = init_x, init_y
@@ -41,7 +44,7 @@ v_y_cloud = np.ones(n_particles) * init_v_y
 def f_grav_point(m1, m2, x, y):
     r = math.sqrt(x**2 + y**2)
     if r == 0: return 0, 0
-    f = -1 * G * m1 / r**2
+    f = -1 * G * m1 * m2 / r**2
     fx = f * (x / r) 
     fy = f * (y / r)
     return fx, fy
@@ -51,7 +54,7 @@ def f_grav_cloud(m1, m2, x, y):
     fx = np.zeros(n_particles)
     fy = np.zeros(n_particles)
     mask = r != 0
-    f = np.where(mask, -1 * G * m1 / r**2, 0)
+    f = np.where(mask, -1 * G * m1 * m2/ r**2, 0)
     fx[mask] = f[mask] * (x[mask] / r[mask]) 
     fy[mask] = f[mask] * (y[mask] / r[mask]) 
     return fx, fy
@@ -117,7 +120,7 @@ def t_force(x, y, r_s, m_star, m_bh):
 def rk4_point(x, y, v_x, v_y):
     # calc acceleration from grav in x and y directions
     def accel(x, y):
-        f_x, f_y = f_grav_pw_point(m_bh, m_star, x, y)
+        f_x, f_y = f_grav_point(m_bh, m_star, x, y)
         a_x = f_x / m_star
         a_y = f_y / m_star
         return a_x, a_y
@@ -160,7 +163,7 @@ def rk4_point(x, y, v_x, v_y):
 def rk4_cloud(x, y, v_x, v_y):
     # calc acceleration from grav in x and y directions
     def accel(x, y):
-        f_x, f_y = f_grav_pw_cloud(m_bh, m_star, x, y)
+        f_x, f_y = f_grav_cloud(m_bh, m_star, x, y)
         a_x = f_x / m_star
         a_y = f_y / m_star
         return a_x, a_y
@@ -203,16 +206,22 @@ def rk4_cloud(x, y, v_x, v_y):
 
 # define plot
 fig, ax = plt.subplots(figsize=(6, 6))
-ax.set_xlim(-r_bh*10, r_bh*10)
-ax.set_ylim(-r_bh*10, r_bh*10)
+ax.set_xlim(-r_bh*15, r_bh*15)
+ax.set_ylim(-r_bh*15, r_bh*15)
 
 # plot black hole
-ax.plot(0, 0, 'o', color='black', markersize=10)
-ax.add_patch(plt.Circle((0, 0), r_bh, color='black', fill=False, linestyle='dashed'))
+# ax.plot(0, 0, 'o', color='black', markersize=10) # black hole
+ax.add_patch(plt.Circle((0, 0), r_bh, color='black', fill=True)) # shwarzschild radius
+# ax.add_patch(plt.Circle((0, 0), r_roche, color='black', fill=False, linestyle='dashed')) # roche limit
 
 # plot star and create scatter plot for star particles
 star, = ax.plot([], [], 'o', color='orange', markersize=3)
 star_cloud = ax.scatter(x_cloud, y_cloud, s=0.2, c='orange')
+particles_consumed_count = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+
+# add star trail lines
+trail_star, = ax.plot([], [], '-', color='orange', linewidth=1)
+trail_x, trail_y = [], []
 
 # initialize plot
 def init():
@@ -224,6 +233,7 @@ def init():
 def update(frame):
     global x_star, y_star, v_x_star, v_y_star
     global x_cloud, y_cloud, v_x_cloud, v_y_cloud
+    global n_particles_consumed
     
     x_star, y_star, v_x_star, v_y_star = rk4_point(x_star, y_star, v_x_star, v_y_star)
     x_cloud, y_cloud, v_x_cloud, v_y_cloud = rk4_cloud(x_cloud, y_cloud, v_x_cloud, v_y_cloud)
@@ -234,18 +244,29 @@ def update(frame):
         v_x_star, v_y_star = 0, 0
     r = np.sqrt(x_cloud**2 + y_cloud**2)
     mask = r <= r_bh
+    consumed = np.sum(mask & (x_cloud != 0))
+    n_particles_consumed += consumed
     x_cloud[mask], y_cloud[mask] = 0, 0
     v_x_cloud[mask], v_y_cloud[mask] = 0, 0
-    
+
+    # update star data
     star.set_data([x_star], [y_star])
 
+    # update cloud data
     speed = np.sqrt(v_x_cloud**2 + v_y_cloud**2)
     speed_norm = np.clip(speed / 1e8, 0, 1) 
     star_color = np.column_stack((speed_norm, np.full_like(speed_norm, 0.2), 1.0 - speed_norm))
     star_cloud.set_offsets(np.column_stack((x_cloud, y_cloud)))
     star_cloud.set_color(star_color)
+    
+    # update star_trail
+    trail_x.append(x_star)
+    trail_y.append(y_star)
+    trail_star.set_data(trail_x, trail_y)
 
-    return star, star_cloud
+    particles_consumed_count.set_text(f"Particles consumed articles: {n_particles_consumed} / {n_particles}")
+
+    return star, star_cloud, particles_consumed_count, # trail_star
 
 def run_animation():
     ani_running = True
@@ -261,7 +282,7 @@ def run_animation():
             ani_running = True
 
     fig.canvas.mpl_connect('button_press_event', onClick)
-    ani = animation.FuncAnimation(fig, update, frames=500, init_func=init, blit=True, interval=20)
+    ani = animation.FuncAnimation(fig, update, frames=500, init_func=init, blit=True, interval=10)
 
 run_animation()
 plt.show()
