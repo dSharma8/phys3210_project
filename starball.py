@@ -11,7 +11,7 @@ c = 2.99792458e8 # speed of light [m/s]
 G = 6.67408e-11 # gravitational constant [m^3 kg^-1 s^-2]
 dt = 10 # time step [s]
 num_steps = 10000 # number of simulation time steps
-
+particle_count = 0
 # define variables
 m_bh = 1e6 * solar_mass # mass of black hole [kg]
 m_star = 10 * solar_mass # mass of star [kg]
@@ -242,6 +242,8 @@ def update(frame):
     if math.sqrt(x_star**2 + y_star**2) <= r_bh: 
         x_star, y_star = 0, 0
         v_x_star, v_y_star = 0, 0
+        particle_count += 1
+
     r = np.sqrt(x_cloud**2 + y_cloud**2)
     mask = r <= r_bh
     consumed = np.sum(mask & (x_cloud != 0))
