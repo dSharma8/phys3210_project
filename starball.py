@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy.optimize import minimize
 
+ani = None
+
 # define constants
 solar_mass = 1.98892e30 # one solar mass [kg]
 solar_radius = 6.957e8 # one solar radius [m]
@@ -16,19 +18,27 @@ particle_count = 0
 
 # define variables
 m_bh = 1e6 * solar_mass # mass of black hole [kg]
-m_star = 10 * solar_mass # mass of star [kg]
+m_star = 10 * solar_mass # mass of star [kg] (use .15, .30, .40, .50, .70, 1, 3, 10 M. for experiments)
 r_bh = 2 * G * m_bh / c**2 # schwarzschild radius of black hole [m]
-r_s = solar_radius # radius of star [m]
+r_s = 2 * solar_radius # radius of star [m]
 r_roche = r_s * (2 * m_bh / m_star)**(1.0/3.0) # roche limit of black hole [m]
+r_t = (m_bh / m_star)**(1/3) * r_s # tidal radius of black hole
+v_t = math.sqrt(G * m_bh / r_t) # initial velocity condition
 n_particles = 1000 # number of particles in star
 m_particles = np.ones(n_particles) * m_star / n_particles # mass of particles [kg]
 n_particles_consumed = 0 # number of particles consumed by black hole
+particles_consumed_over_time = [] # number of particles consumed by black hole over time
+time_series = [] # to store corresponding time
 
 # define initial conditions
-init_x = r_bh*5
-init_y = r_bh*5
-init_v_x = -6e7
-init_v_y = 6e7
+# init_x = r_bh*5
+# init_y = r_bh*5
+# init_v_x = -6e7
+# init_v_y = 6e7
+init_x = 0
+init_y = r_t * -3
+init_v_x = v_t * 0.447
+init_v_y = v_t * 0.589
 
 # generate central star
 x_star, y_star = init_x, init_y
@@ -42,6 +52,20 @@ y_cloud = (radii * np.sin(theta)) + init_y
 v_x_cloud = np.ones(n_particles) * init_v_x
 v_y_cloud = np.ones(n_particles) * init_v_y
 
+# add internal star rotation
+# rel_x = x_cloud - init_x
+# rel_y = y_cloud - init_y
+# rel_r = np.sqrt(rel_x**2 + rel_y**2)
+# mask = rel_r != 0
+# v_rot = np.zeros(n_particles)
+# v_rot[mask] = np.sqrt(G * m_star / rel_r[mask])
+# v_tangent_x = np.zeros(n_particles)
+# v_tangent_y = np.zeros(n_particles)
+# v_tangent_x[mask] = -v_rot[mask] * (rel_y[mask] / rel_r[mask])
+# v_tangent_y[mask] = v_rot[mask] * (rel_x[mask] / rel_r[mask])
+# v_x_cloud += v_tangent_x
+# v_y_cloud += v_tangent_y
+
 # define function for force of grav on star -- newtonian
 def f_grav_point(m1, m2, x, y):
     r = math.sqrt(x**2 + y**2)
@@ -51,12 +75,12 @@ def f_grav_point(m1, m2, x, y):
     fy = f * (y / r)
     return fx, fy
 def f_grav_cloud(m1, m2, x, y):
-    #"""
+    """
     r = np.sqrt(x**2 + y**2)
     fx = np.zeros(n_particles)
     fy = np.zeros(n_particles)
     mask = r != 0
-    f = np.where(mask, -1 * G * m1 * m2/ r**2, 0)
+    f = np.where(mask, -1 * G * m1 * m2 / r**2, 0)
     fx[mask] = f[mask] * (x[mask] / r[mask]) 
     fy[mask] = f[mask] * (y[mask] / r[mask]) 
     return fx, fy
@@ -75,16 +99,17 @@ def f_grav_cloud(m1, m2, x, y):
     r_star = np.sqrt(dx_star**2 + dy_star**2)
     fx_star = np.zeros(n_particles)
     fy_star = np.zeros(n_particles)
-    mask_star = r_star > r_s * 1.5
-    f_star = np.where(mask_star, -1 * G * m1 * m2 / r_star**2, 0)
+    mask_star = r_star != r_s
+    f_star = np.where(mask_star, -1 * G * m_star * m2 / r_star**2, 0)
     fx_star[mask_star] = f_star[mask_star] * (dx_star[mask_star] / r_star[mask_star]) 
     fy_star[mask_star] = f_star[mask_star] * (dy_star[mask_star] / r_star[mask_star]) 
 
     # sum total forces
     fx = fx_bh + fx_star
     fy = fy_bh + fy_star
+    
     return fx, fy
-    """
+    # """
 
 # define function for force of grav on star -- paczyński–wiita potential = phi = - G * M / (r - r_bh)
 def f_grav_pw_point(m1, m2, x, y):
@@ -122,7 +147,7 @@ def t_force(x, y, r_s, m_star, m_bh):
 def rk4_point(x, y, v_x, v_y):
     # calc acceleration from grav in x and y directions
     def accel(x, y):
-        f_x, f_y = f_grav_point(m_bh, m_star, x, y)
+        f_x, f_y = f_grav_pw_point(m_bh, m_star, x, y)
         a_x = f_x / m_star
         a_y = f_y / m_star
         return a_x, a_y
@@ -165,9 +190,9 @@ def rk4_point(x, y, v_x, v_y):
 def rk4_cloud(x, y, v_x, v_y):
     # calc acceleration from grav in x and y directions
     def accel(x, y):
-        f_x, f_y = f_grav_cloud(m_bh, m_star, x, y)
-        a_x = f_x / m_star
-        a_y = f_y / m_star
+        f_x, f_y = f_grav_pw_cloud(m_bh, m_particles, x, y)
+        a_x = f_x / m_particles
+        a_y = f_y / m_particles
         return a_x, a_y
 
     # k1
@@ -207,14 +232,14 @@ def rk4_cloud(x, y, v_x, v_y):
     return x, y, v_x, v_y
 
 # define plot
-fig, ax = plt.subplots(figsize=(6, 6))
-ax.set_xlim(-r_bh*15, r_bh*15)
-ax.set_ylim(-r_bh*15, r_bh*15)
+fig, ax = plt.subplots(figsize=(8, 8))
+ax.set_xlim(-r_t*4, r_t*4)
+ax.set_ylim(-r_t*4, r_t*4)
 
 # plot black hole
-# ax.plot(0, 0, 'o', color='black', markersize=10) # black hole
-ax.add_patch(plt.Circle((0, 0), r_bh, color='black', fill=True)) # shwarzschild radius
-# ax.add_patch(plt.Circle((0, 0), r_roche, color='black', fill=False, linestyle='dashed')) # roche limit
+ax.add_patch(plt.Circle((0, 0), r_bh, color='black', fill=True)) # black hole (shwarzschild radius)
+ax.add_patch(plt.Circle((0, 0), r_t, color='blue', fill=False, linestyle='dashed')) # tidal radius
+# ax.add_patch(plt.Circle((0, 0), r_roche, color='green', fill=False, linestyle='dashed')) # roche limit
 
 # plot star and create scatter plot for star particles
 star, = ax.plot([], [], 'o', color='orange', markersize=3)
@@ -237,6 +262,7 @@ def update(frame):
     global x_star, y_star, v_x_star, v_y_star
     global x_cloud, y_cloud, v_x_cloud, v_y_cloud
     global n_particles_consumed, elapsed_time
+    global ani
     
     x_star, y_star, v_x_star, v_y_star = rk4_point(x_star, y_star, v_x_star, v_y_star)
     x_cloud, y_cloud, v_x_cloud, v_y_cloud = rk4_cloud(x_cloud, y_cloud, v_x_cloud, v_y_cloud)
@@ -247,16 +273,17 @@ def update(frame):
         v_x_star, v_y_star = 0, 0
     r = np.sqrt(x_cloud**2 + y_cloud**2)
     mask = r <= r_bh
-    x_cloud[mask], y_cloud[mask] = 0, 0
-    v_x_cloud[mask], v_y_cloud[mask] = 0, 0
-
     # update count of consumed particles
     consumed = np.sum(mask & (x_cloud != 0))
     n_particles_consumed += consumed
     particles_consumed_count.set_text(f"Particles consumed: {n_particles_consumed} / {n_particles}")
+    particles_consumed_over_time.append(n_particles_consumed)
+    x_cloud[mask], y_cloud[mask] = 0, 0
+    v_x_cloud[mask], v_y_cloud[mask] = 0, 0
 
     # update timer
     elapsed_time += dt
+    time_series.append(elapsed_time)
     timer.set_text(f"Elapsed time: {int(elapsed_time / 60)} min")
 
     # update star data
@@ -274,9 +301,15 @@ def update(frame):
     trail_y.append(y_star)
     trail_star.set_data(trail_x, trail_y)
 
-    return star, star_cloud, particles_consumed_count, timer # trail_star
+    # when finished, end animation
+    if n_particles_consumed == n_particles: ani.event_source.stop()
 
+    return star, star_cloud, particles_consumed_count, timer, # trail_star
+
+# funciton to run animation
 def run_animation():
+    global ani
+
     ani_running = True
 
     # pause functionality
@@ -292,5 +325,15 @@ def run_animation():
     fig.canvas.mpl_connect('button_press_event', onClick)
     ani = animation.FuncAnimation(fig, update, frames=500, init_func=init, blit=True, interval=10)
 
+# plot animation
 run_animation()
 plt.show()
+
+# get graph for particles consumed over time
+# plt.figure()
+# plt.plot(np.array(time_series) / 60, particles_consumed_over_time)
+# plt.xlabel("Time (minutes)")
+# plt.ylabel("Particles Consumed")
+# plt.title("Particles Eaten by Black Hole Over Time")
+# plt.grid(True)
+# plt.show()
