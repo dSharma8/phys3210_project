@@ -2,7 +2,6 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from scipy.optimize import minimize
 
 ani = None
 
@@ -23,22 +22,23 @@ r_bh = 2 * G * m_bh / c**2 # schwarzschild radius of black hole [m]
 r_s = 2 * solar_radius # radius of star [m]
 r_roche = r_s * (2 * m_bh / m_star)**(1.0/3.0) # roche limit of black hole [m]
 r_t = (m_bh / m_star)**(1/3) * r_s # tidal radius of black hole
-v_t = math.sqrt(G * m_bh / r_t) # initial velocity condition
+v_t = math.sqrt(G * (m_bh + m_star) / r_t) # initial velocity condition
 n_particles = 1000 # number of particles in star
 m_particles = np.ones(n_particles) * m_star / n_particles # mass of particles [kg]
 n_particles_consumed = 0 # number of particles consumed by black hole
 particles_consumed_over_time = [] # number of particles consumed by black hole over time
 time_series = [] # to store corresponding time
+epsilon = 1e7 # constant for force softening [m]
 
 # define initial conditions
 # init_x = r_bh*5
 # init_y = r_bh*5
 # init_v_x = -6e7
 # init_v_y = 6e7
-init_x = 0
-init_y = r_t * -3
-init_v_x = v_t * 0.447
-init_v_y = v_t * 0.589
+init_x = r_t * 0
+init_y = r_t * -1
+init_v_x = v_t * .65
+init_v_y = v_t * .6
 
 # generate central star
 x_star, y_star = init_x, init_y
@@ -96,10 +96,11 @@ def f_grav_cloud(m1, m2, x, y):
 
     # affect of central star mass on particles
     dx_star, dy_star = x - x_star, y - y_star
-    r_star = np.sqrt(dx_star**2 + dy_star**2)
+    r_star = np.sqrt(dx_star**2 + dy_star**2 + epsilon**2)
     fx_star = np.zeros(n_particles)
     fy_star = np.zeros(n_particles)
-    mask_star = r_star != r_s
+    # mask_star = r_star != r_s
+    mask_star = True
     f_star = np.where(mask_star, -1 * G * m_star * m2 / r_star**2, 0)
     fx_star[mask_star] = f_star[mask_star] * (dx_star[mask_star] / r_star[mask_star]) 
     fy_star[mask_star] = f_star[mask_star] * (dy_star[mask_star] / r_star[mask_star]) 
@@ -120,6 +121,7 @@ def f_grav_pw_point(m1, m2, x, y):
     fy = f * (y / r)
     return fx, fy
 def f_grav_pw_cloud(m1, m2, x, y):
+    """
     r = np.sqrt(x**2 + y**2)
     fx = np.zeros(n_particles)
     fy = np.zeros(n_particles)
@@ -128,6 +130,32 @@ def f_grav_pw_cloud(m1, m2, x, y):
     fx[mask] = f[mask] * (x[mask] / r[mask]) 
     fy[mask] = f[mask] * (y[mask] / r[mask]) 
     return fx, fy
+    """
+    # affect of black hole on particles
+    r = np.sqrt(x**2 + y**2)
+    fx_bh = np.zeros(n_particles)
+    fy_bh = np.zeros(n_particles)
+    mask_bh = r > r_bh
+    f_bh = np.where(mask_bh, -1 * G * m1 * m2 / (r - r_bh)**2, 0)
+    fx_bh[mask_bh] = f_bh[mask_bh] * (x[mask_bh] / r[mask_bh]) 
+    fy_bh[mask_bh] = f_bh[mask_bh] * (y[mask_bh] / r[mask_bh]) 
+
+    # affect of central star mass on particles
+    dx_star, dy_star = x - x_star, y - y_star
+    r_star = np.sqrt(dx_star**2 + dy_star**2 + epsilon**2)
+    fx_star = np.zeros(n_particles)
+    fy_star = np.zeros(n_particles)
+    mask_star = r_star != r_s
+    f_star = np.where(mask_star, -1 * G * m_star * m2 / r_star**2, 0)
+    fx_star[mask_star] = f_star[mask_star] * (dx_star[mask_star] / r_star[mask_star]) 
+    fy_star[mask_star] = f_star[mask_star] * (dy_star[mask_star] / r_star[mask_star]) 
+
+    # sum total forces
+    fx = fx_bh + fx_star
+    fy = fy_bh + fy_star
+    
+    return fx, fy
+    #"""
 
 """
 # define function for tidal forces across star
@@ -233,8 +261,8 @@ def rk4_cloud(x, y, v_x, v_y):
 
 # define plot
 fig, ax = plt.subplots(figsize=(8, 8))
-ax.set_xlim(-r_t*4, r_t*4)
-ax.set_ylim(-r_t*4, r_t*4)
+ax.set_xlim(-r_t*2, r_t*2)
+ax.set_ylim(-r_t*2, r_t*2)
 
 # plot black hole
 ax.add_patch(plt.Circle((0, 0), r_bh, color='black', fill=True)) # black hole (shwarzschild radius)
