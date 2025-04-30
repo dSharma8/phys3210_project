@@ -75,7 +75,7 @@ def f_grav_point(m1, m2, x, y):
     fy = f * (y / r)
     return fx, fy
 def f_grav_cloud(m1, m2, x, y):
-    """
+    #"""
     r = np.sqrt(x**2 + y**2)
     fx = np.zeros(n_particles)
     fy = np.zeros(n_particles)
@@ -110,7 +110,7 @@ def f_grav_cloud(m1, m2, x, y):
     fy = fy_bh + fy_star
     
     return fx, fy
-    # """
+    """
 
 # define function for force of grav on star -- paczyński–wiita potential = phi = - G * M / (r - r_bh)
 def f_grav_pw_point(m1, m2, x, y):
